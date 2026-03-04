@@ -8,25 +8,7 @@ Usage:
   python main.py run     # Run indefinitely: every N hours check for today's gas data, fetch if missing
 """
 
-import sys
-
-
-def main() -> None:
-    if len(sys.argv) < 2 or sys.argv[1] not in ("collect", "nws", "run"):
-        print("Usage: python main.py collect | nws | run")
-        sys.exit(1)
-    cmd = sys.argv[1]
-    if cmd == "collect":
-        from collect_forecast import main as collect_main
-        collect_main()
-    elif cmd == "nws":
-        from collect_nws import main as nws_main
-        nws_main()
-    else:
-        from run_loop import run_indefinitely, _parse_run_args
-        data_dir, interval = _parse_run_args()
-        run_indefinitely(data_dir=data_dir, interval_hours=interval)
-
+from weather_modeling.cli.main import main
 
 if __name__ == "__main__":
     main()

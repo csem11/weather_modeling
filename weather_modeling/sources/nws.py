@@ -16,15 +16,15 @@ import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 
-from config import NWS_CLI_STATIONS
+from weather_modeling.config import NWS_CLI_STATIONS
+from weather_modeling.storage.io import load_nws_data as _load_nws_data
+from weather_modeling.storage.io import save_nws_data as _save_nws_data
 
 NWS_PRODUCT_BASE = "https://forecast.weather.gov/product.php"
 USER_AGENT = "WeatherModeling/1.0 (educational; contact optional)"
 REQUEST_TIMEOUT = 30
-# Delay between requests (seconds) to avoid overloading the server
 REQUEST_DELAY = 0.4
 
-# Month name -> number for parsing "MARCH 3 2026"
 MONTH_NAMES = {
     "JAN": 1, "FEB": 2, "MAR": 3, "APR": 4, "MAY": 5, "JUN": 6,
     "JUL": 7, "AUG": 8, "SEP": 9, "OCT": 10, "NOV": 11, "DEC": 12,
@@ -36,9 +36,7 @@ def _f_to_c(f: float) -> float:
 
 
 def _get_report_text(site: str, issuedby: str, version: int | None = None) -> str | None:
-    """Fetch CLI product page and return the main text content (pre or body).
-    version=1 is latest, version=2 is previous day, etc. None = latest (no version param).
-    """
+    """Fetch CLI product page and return the main text content (pre or body)."""
     params = {"site": site, "product": "CLI", "issuedby": issuedby}
     if version is not None:
         params["version"] = version
@@ -52,7 +50,6 @@ def _get_report_text(site: str, issuedby: str, version: int | None = None) -> st
     pre = soup.find("pre")
     if pre:
         return pre.get_text(separator="\n")
-    # Fallback: product text is sometimes in a div with class pre
     for tag in soup.find_all(class_=re.compile(r"pre|product", re.I)):
         if tag.get_text().strip().startswith("CLIMATE"):
             return tag.get_text(separator="\n")
@@ -70,7 +67,6 @@ def _get_version_links(site: str, issuedby: str) -> list[int]:
         return []
     soup = BeautifulSoup(r.text, "html.parser")
     versions = []
-    # Links like <a href="product.php?....&version=2">2</a> or href with version=
     for a in soup.find_all("a", href=True):
         href = a.get("href", "")
         match = re.search(r"version=(\d+)", href, re.IGNORECASE)
@@ -78,19 +74,15 @@ def _get_version_links(site: str, issuedby: str) -> list[int]:
             v = int(match.group(1))
             if v not in versions:
                 versions.append(v)
-    return sorted(versions, reverse=True)  # newest first (1, 2, 3, ...)
+    return sorted(versions, reverse=True)
 
 
 def _parse_cli_report(text: str, city: str, site: str, issuedby: str) -> dict[str, Any] | None:
-    """
-    Parse CLI report text. Returns one row: date, city, site, issuedby, max_temp_f, min_temp_f,
-    max_temp_c, min_temp_c, precip_in, report_date_parsed.
-    """
+    """Parse CLI report text. Returns one row: date, city, site, issuedby, max_temp_f, min_temp_f, etc."""
     if not text or "CLIMATE" not in text.upper():
         return None
     out = {"city": city, "site": site, "issuedby": issuedby}
 
-    # Date: "...CLIMATE SUMMARY FOR MARCH 3 2026..."
     date_m = re.search(
         r"CLIMATE\s+SUMMARY\s+FOR\s+(\w+)\s+(\d+)\s+(\d{4})",
         text,
@@ -106,8 +98,6 @@ def _parse_cli_report(text: str, city: str, site: str, issuedby: str) -> dict[st
         out["report_date"] = None
         out["report_date_parsed"] = None
 
-    # Temperatures (F) - look for YESTERDAY block then MAXIMUM / MINIMUM
-    # Pattern: "MAXIMUM         67   1:00 PM" or "MAXIMUM         67 "
     max_m = re.search(r"MAXIMUM\s+(\d+)\s+(?:\d|\.|:|\w)", text)
     min_m = re.search(r"MINIMUM\s+(\d+)\s+(?:\d|\.|:|\w)", text)
     if max_m:
@@ -123,7 +113,6 @@ def _parse_cli_report(text: str, city: str, site: str, issuedby: str) -> dict[st
         out["min_temp_f"] = None
         out["min_temp_c"] = None
 
-    # Precipitation (in) - "YESTERDAY        0.00" under PRECIPITATION
     precip_section = re.search(r"PRECIPITATION\s*\(IN\)(.*?)(?=SNOWFALL|DEGREE|WIND|$)", text, re.DOTALL | re.IGNORECASE)
     if precip_section:
         block = precip_section.group(1)
@@ -143,9 +132,7 @@ def _parse_cli_report(text: str, city: str, site: str, issuedby: str) -> dict[st
 
 
 def scrape_one(city: str, site: str, issuedby: str, version: int | None = None) -> dict[str, Any] | None:
-    """Fetch and parse one CLI report. Returns parsed row or None on failure.
-    version=None for latest; version=1,2,3,... for historical issuances.
-    """
+    """Fetch and parse one CLI report. Returns parsed row or None on failure."""
     text = _get_report_text(site, issuedby, version=version)
     if not text:
         return None
@@ -160,9 +147,7 @@ def scrape_one_versions(
     stop_after_empty: int = 3,
     delay_seconds: float | None = None,
 ) -> list[dict[str, Any]]:
-    """Fetch multiple versioned reports for one station (latest + historical). Returns list of parsed rows.
-    delay_seconds: pause after each version request (default REQUEST_DELAY). Use larger value for backfill.
-    """
+    """Fetch multiple versioned reports for one station (latest + historical). Returns list of parsed rows."""
     delay = delay_seconds if delay_seconds is not None else REQUEST_DELAY
     versions = _get_version_links(site, issuedby)
     if not versions:
@@ -207,10 +192,7 @@ def scrape_all_historical(
     stations: list[tuple[str, str, str]] | None = None,
     max_versions_per_station: int = 60,
 ) -> pd.DataFrame:
-    """Scrape latest + historical CLI reports for each station via version links.
-    Returns DataFrame with one row per (station, report_date). Uses version=1,2,3,...
-    to fetch older issuances and deduplicates by report_date per station.
-    """
+    """Scrape latest + historical CLI reports for each station via version links."""
     stations = stations or NWS_CLI_STATIONS
     all_rows = []
     for i, (city, site, issuedby) in enumerate(stations):
@@ -222,45 +204,10 @@ def scrape_all_historical(
 
 
 def save_nws_data(df: pd.DataFrame, directory: str | Path = "data") -> Path:
-    """Append or write scraped NWS data to data/nws_daily.csv. Uses report_date as date column."""
-    path = Path(directory)
-    path.mkdir(parents=True, exist_ok=True)
-    out_file = path / "nws_daily.csv"
-
-    # Drop rows with no report_date
-    if df.empty:
-        return out_file
-    df = df.dropna(subset=["report_date"]).copy()
-    if df.empty:
-        return out_file
-
-    # If file exists, merge and dedupe by (report_date, city)
-    if out_file.exists():
-        try:
-            existing = pd.read_csv(out_file)
-            if "report_date" in existing.columns:
-                existing["report_date"] = pd.to_datetime(existing["report_date"]).dt.date
-            new_keys = set(zip(df["report_date"].astype(str), df["city"]))
-            existing["_key"] = list(zip(existing["report_date"].astype(str), existing["city"]))
-            existing = existing[~existing["_key"].isin(new_keys)].drop(columns=["_key"])
-            df_combined = pd.concat([existing, df], ignore_index=True)
-            df_combined = df_combined.drop_duplicates(subset=["report_date", "city"], keep="last")
-            df_combined = df_combined.sort_values(["report_date", "city"]).reset_index(drop=True)
-        except Exception:
-            df_combined = df
-    else:
-        df_combined = df
-
-    df_combined.to_csv(out_file, index=False)
-    return out_file
+    """Append or write scraped NWS data to data/nws_daily.csv. Delegates to storage."""
+    return _save_nws_data(df, directory)
 
 
 def load_nws_data(directory: str | Path = "data") -> pd.DataFrame:
-    """Load NWS daily data from data/nws_daily.csv."""
-    path = Path(directory) / "nws_daily.csv"
-    if not path.exists():
-        return pd.DataFrame()
-    df = pd.read_csv(path)
-    if "report_date" in df.columns:
-        df["report_date"] = pd.to_datetime(df["report_date"]).dt.date
-    return df
+    """Load NWS daily data from data/nws_daily.csv. Delegates to storage."""
+    return _load_nws_data(directory)

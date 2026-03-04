@@ -15,14 +15,14 @@ from pathlib import Path
 
 import pandas as pd
 
-from config import (
+from weather_modeling.config import (
     NWS_BACKFILL_DELAY_STATIONS,
     NWS_BACKFILL_DELAY_VERSIONS,
     NWS_BACKFILL_JITTER,
     NWS_BACKFILL_MAX_VERSIONS,
     NWS_BACKFILL_STATIONS,
 )
-from nws_scraper import load_nws_data, save_nws_data, scrape_one_versions
+from weather_modeling.sources.nws import load_nws_data, save_nws_data, scrape_one_versions
 
 
 def _jitter(base: float, jitter_max: float) -> float:
@@ -65,7 +65,6 @@ def main() -> None:
         print(f"{len(rows)} rows in {elapsed:.0f}s (total {len(all_rows)} rows)", flush=True)
         if all_rows:
             save_nws_data(pd.DataFrame(all_rows), data_dir)
-        # Long pause before next station
         pause = _jitter(NWS_BACKFILL_DELAY_STATIONS, NWS_BACKFILL_JITTER)
         if i < len(stations):
             time.sleep(pause)
