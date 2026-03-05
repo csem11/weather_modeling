@@ -146,8 +146,12 @@ def scrape_one_versions(
     max_versions: int = 60,
     stop_after_empty: int = 3,
     delay_seconds: float | None = None,
+    *,
+    progress_interval: int | None = None,
 ) -> list[dict[str, Any]]:
-    """Fetch multiple versioned reports for one station (latest + historical). Returns list of parsed rows."""
+    """Fetch multiple versioned reports for one station (latest + historical). Returns list of parsed rows.
+    If progress_interval is set (e.g. 10), prints a dot every that many version requests to show activity.
+    """
     delay = delay_seconds if delay_seconds is not None else REQUEST_DELAY
     versions = _get_version_links(site, issuedby)
     if not versions:
@@ -157,7 +161,9 @@ def scrape_one_versions(
     rows = []
     seen_dates = set()
     empty_streak = 0
-    for v in versions:
+    for vi, v in enumerate(versions):
+        if progress_interval and vi > 0 and vi % progress_interval == 0:
+            print(".", end="", flush=True)
         row = scrape_one(city, site, issuedby, version=v)
         time.sleep(delay)
         if not row or not row.get("report_date"):
@@ -191,13 +197,24 @@ def scrape_all(stations: list[tuple[str, str, str]] | None = None) -> pd.DataFra
 def scrape_all_historical(
     stations: list[tuple[str, str, str]] | None = None,
     max_versions_per_station: int = 60,
+    *,
+    verbose: bool = True,
 ) -> pd.DataFrame:
     """Scrape latest + historical CLI reports for each station via version links."""
     stations = stations or NWS_CLI_STATIONS
     all_rows = []
+    n = len(stations)
     for i, (city, site, issuedby) in enumerate(stations):
-        station_rows = scrape_one_versions(city, site, issuedby, max_versions=max_versions_per_station)
+        if verbose:
+            print(f"  [{i + 1}/{n}] {city} ({site}/{issuedby}) ... ", end="", flush=True)
+        station_rows = scrape_one_versions(
+            city, site, issuedby,
+            max_versions=max_versions_per_station,
+            progress_interval=10 if verbose else None,
+        )
         all_rows.extend(station_rows)
+        if verbose:
+            print(f" {len(station_rows)} rows", flush=True)
     if not all_rows:
         return pd.DataFrame()
     return pd.DataFrame(all_rows)
