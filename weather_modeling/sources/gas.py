@@ -265,6 +265,9 @@ def save_gas_to_data(
 
     national_new = _build_national_df(data)
     state_new = _build_state_df(data)
+    # Normalize date to datetime.date so concat/sort_values don't mix str and date
+    national_new["date"] = pd.to_datetime(national_new["date"]).dt.date
+    state_new["date"] = pd.to_datetime(state_new["date"]).dt.date
 
     national_path = directory / "gas_national.csv"
     state_path = directory / "gas_state.csv"
