@@ -1,11 +1,12 @@
-"""Dispatch for main.py collect | nws | run."""
+"""Dispatch for main.py collect | nws | run | daily."""
 
 import sys
 
 
 def main() -> None:
-    if len(sys.argv) < 2 or sys.argv[1] not in ("collect", "nws", "run"):
-        print("Usage: python main.py collect | nws | run")
+    valid = ("collect", "nws", "run", "daily")
+    if len(sys.argv) < 2 or sys.argv[1] not in valid:
+        print("Usage: python main.py collect | nws | run | daily")
         sys.exit(1)
     cmd = sys.argv[1]
     if cmd == "collect":
@@ -14,6 +15,22 @@ def main() -> None:
     elif cmd == "nws":
         from weather_modeling.cli.collect_nws import main as nws_main
         nws_main()
+    elif cmd == "daily":
+        from pathlib import Path
+        from weather_modeling.cli.collect_forecast import main as collect_main
+        from weather_modeling.cli.collect_nws import main as nws_main
+        from weather_modeling.sources.gas import fetch_all_gas_prices, save_gas_to_data
+        data_dir = Path("data")
+        print("=== Daily collection: forecast, NWS (latest), gas ===\n")
+        collect_main()
+        print()
+        nws_main()
+        print()
+        print("Fetching gas prices...")
+        data = fetch_all_gas_prices()
+        save_gas_to_data(data, data_dir)
+        print("Gas data saved.")
+        print("\n=== Daily collection complete ===")
     else:
         from weather_modeling.cli.run_loop import run_indefinitely, parse_run_args
         data_dir, interval = parse_run_args()
