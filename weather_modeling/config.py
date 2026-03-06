@@ -158,5 +158,6 @@ NWS_CLI_STATIONS = [
     ("Jacksonville", "JAX", "JAX"),
 ]
 
-# Run loop (python main.py run): hours between checks for today's gas price data
-GAS_CHECK_INTERVAL_HOURS = 4
+# Run loop (python main.py run): hours between full daily collections (forecast + NWS + gas)
+# Default 12 = run twice per day. Override with --interval N.
+RUN_LOOP_INTERVAL_HOURS = 12

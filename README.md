@@ -81,11 +81,11 @@ python fetch_gas_prices.py
 python fetch_gas_prices.py --data-dir data
 ```
 
-Optional: run a loop that periodically checks for today’s gas data and fetches if missing:
+Optional: run indefinitely and perform full daily collection (forecast + NWS + gas) every 12 hours (twice per day):
 
 ```bash
 python main.py run
-python main.py run --interval 6 --data-dir data
+python main.py run --interval 6 --data-dir data   # every 6 hours
 ```
 
 ---
@@ -130,7 +130,7 @@ df = add_nws_targets(df, nws_df)
 
 ## Configuration
 
-- **`weather_modeling.config`** (and root **`config.py`** re-export): Open-Meteo URLs; city lists (`CITIES`, `NWS_CLI_STATIONS`, `NWS_BACKFILL_STATIONS`); forecast/history lengths; NWS backfill delays; gas-check interval for `main.py run`.
+- **`weather_modeling.config`** (and root **`config.py`** re-export): Open-Meteo URLs; city lists; forecast/history lengths; NWS backfill delays; `RUN_LOOP_INTERVAL_HOURS` for `main.py run` (default 12).
 - No API keys for Open-Meteo (non-commercial) or NWS. AAA is public scraping.
 
 ## Project layout

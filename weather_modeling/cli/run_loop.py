@@ -1,33 +1,33 @@
-"""Long-running loop: every N hours check if today's gas data exists and fetch if not."""
+"""Long-running loop: run full daily collection (forecast + NWS + gas) every N hours."""
 
 import sys
 import time
-from datetime import date, datetime
+from datetime import datetime
 from pathlib import Path
 
-import pandas as pd
-
-from weather_modeling.config import GAS_CHECK_INTERVAL_HOURS
-from weather_modeling.sources.gas import fetch_all_gas_prices, save_gas_to_data
+from weather_modeling.config import RUN_LOOP_INTERVAL_HOURS
 
 
-def _today_gas_collected(data_dir: Path) -> bool:
-    """Return True if gas_national.csv contains a row for today's date."""
-    path = data_dir / "gas_national.csv"
-    if not path.exists():
-        return False
-    df = pd.read_csv(path)
-    if df.empty or "date" not in df.columns:
-        return False
-    df["date"] = pd.to_datetime(df["date"]).dt.date
-    today = date.today()
-    return today in df["date"].values
+def _run_daily_collection(data_dir: Path) -> None:
+    """Run one full daily collection: forecast, NWS (latest), gas."""
+    from weather_modeling.cli.collect_forecast import main as collect_main
+    from weather_modeling.cli.collect_nws import main as nws_main
+    from weather_modeling.sources.gas import fetch_all_gas_prices, save_gas_to_data
+
+    collect_main()
+    print()
+    nws_main()
+    print()
+    print("Fetching gas prices...")
+    data = fetch_all_gas_prices()
+    save_gas_to_data(data, data_dir)
+    print("Gas data saved.")
 
 
 def parse_run_args() -> tuple[Path, float]:
     """Parse sys.argv for run command: --interval HOURS, --data-dir PATH."""
     data_dir = Path("data")
-    interval_hours = GAS_CHECK_INTERVAL_HOURS
+    interval_hours = RUN_LOOP_INTERVAL_HOURS
     args = sys.argv[2:]
     i = 0
     while i < len(args):
@@ -47,28 +47,24 @@ def parse_run_args() -> tuple[Path, float]:
 
 def run_indefinitely(data_dir: Path | str = "data", interval_hours: float | None = None) -> None:
     """
-    Run forever: every interval_hours, check if today's gas data is in data/gas_national.csv.
-    If not, run the gas price fetch and save. Then sleep until next check.
+    Run forever: every interval_hours, run full daily collection (forecast + NWS latest + gas).
+    Default interval is 12 hours (twice per day). Override with --interval N.
     """
     data_dir = Path(data_dir)
     data_dir.mkdir(parents=True, exist_ok=True)
-    interval_hours = interval_hours if interval_hours is not None else GAS_CHECK_INTERVAL_HOURS
+    interval_hours = interval_hours if interval_hours is not None else RUN_LOOP_INTERVAL_HOURS
     interval_seconds = max(60, interval_hours * 3600)
 
-    print(f"Run loop started: check gas data every {interval_hours} hours (every {interval_seconds:.0f}s)")
+    print(f"Run loop started: full daily collection every {interval_hours} hours (every {interval_seconds:.0f}s)")
     print("Press Ctrl+C to stop.")
     print()
 
     while True:
         try:
             now = datetime.now().isoformat(timespec="seconds")
-            if _today_gas_collected(data_dir):
-                print(f"[{now}] Today's gas price data already present. Next check in {interval_hours} hours.")
-            else:
-                print(f"[{now}] Today's gas data missing. Fetching...")
-                data = fetch_all_gas_prices()
-                save_gas_to_data(data, data_dir)
-                print(f"[{datetime.now().isoformat(timespec='seconds')}] Gas data saved.")
+            print(f"[{now}] Running daily collection (forecast + NWS + gas)...")
+            _run_daily_collection(data_dir)
+            print(f"[{datetime.now().isoformat(timespec='seconds')}] Done. Next run in {interval_hours} hours.")
             time.sleep(interval_seconds)
         except KeyboardInterrupt:
             print("\nStopped.")
