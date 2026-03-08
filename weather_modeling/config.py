@@ -161,3 +161,10 @@ NWS_CLI_STATIONS = [
 # Run loop (python main.py run): hours between full daily collections (forecast + NWS + gas)
 # Default 12 = run twice per day. Override with --interval N.
 RUN_LOOP_INTERVAL_HOURS = 12
+
+# Treasury yield curve: start year for historical backfill (e.g. 2020 = fetch from 2020-01 to now)
+TREASURY_BACKFILL_START_YEAR = 2020
+
+# Treasury CSV base URL (month appended as /YYYYMM; query string added for type and format)
+# If the site changes, update this. Example: ".../daily-treasury-rates.csv/all"
+TREASURY_CSV_BASE = "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/all"

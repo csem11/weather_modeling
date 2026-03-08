@@ -17,6 +17,12 @@ from weather_modeling.sources.nws import (
     scrape_one_versions,
 )
 from weather_modeling.sources.gas import fetch_all_gas_prices, save_gas_to_data
+from weather_modeling.sources.treasury import (
+    fetch_latest,
+    fetch_range,
+    fetch_month,
+    save_treasury_to_data,
+)
 
 __all__ = [
     "collect_forecast",
@@ -33,4 +39,8 @@ __all__ = [
     "scrape_one_versions",
     "fetch_all_gas_prices",
     "save_gas_to_data",
+    "fetch_latest",
+    "fetch_range",
+    "fetch_month",
+    "save_treasury_to_data",
 ]

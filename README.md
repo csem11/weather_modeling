@@ -10,6 +10,7 @@ Collect and persist:
 
 - **Weather**: historical and forecast data (hourly/daily) from Open-Meteo; observed daily climate (max/min temp, precip) from NWS for US stations.
 - **Gas prices**: national and state-level AAA gas prices.
+- **Treasury yields**: daily Treasury yield curve (CMT rates by maturity) from U.S. Treasury CSV.
 
 Dataset construction (e.g. merging sources, building feature tables with lags and NWS targets) is supported in code so the same data can later be used for modeling or analysis. **Model training and prediction are out of scope for this repo**; the focus is ingestion and dataset building.
 
@@ -22,6 +23,7 @@ Dataset construction (e.g. merging sources, building feature tables with lags an
 | Open-Meteo        | ✅     | Historical (archive) + forecast; hourly/daily; configurable cities. |
 | NWS climate (CLI) | ✅     | Scrape daily reports; optional historical backfill via version links. |
 | AAA gas prices    | ✅     | National + state table + per-state detail; optional run loop. |
+| Treasury yield curve | ✅   | Daily CMT rates (CSV by month); optional backfill from start year. |
 | Dataset building  | ✅     | `weather_modeling.pipeline`: build feature tables, merge NWS targets (temps in °F). |
 | Modeling          | ❌     | Not included; use this repo for data only. |
 
@@ -88,6 +90,18 @@ python main.py run
 python main.py run --interval 6 --data-dir data   # every 6 hours
 ```
 
+### Treasury yield curve
+
+Daily U.S. Treasury yield curve (CMT rates by maturity) from [home.treasury.gov](https://home.treasury.gov/resource-center/data-chart-center/interest-rates/TextView?type=daily_treasury_yield_curve). Saved to `data/treasury_yield_curve.csv`:
+
+```bash
+python main.py treasury                    # Latest (current + previous month)
+python main.py treasury --backfill        # Historical from config start year (default 2020)
+python main.py treasury --backfill --start-year 2015
+# or
+python collect_treasury.py [--backfill] [--start-year YYYY]
+```
+
 ---
 
 ## Data layout
@@ -101,6 +115,7 @@ python main.py run --interval 6 --data-dir data   # every 6 hours
 | `data/nws_daily.csv` | `main.py nws` / `backfill_nws.py` | NWS CLI: report_date, city, site, issuedby, max/min temp (°F), precip, etc. |
 | `data/gas_national.csv` | `fetch_gas_prices.py` | National averages by fuel and time period. |
 | `data/gas_state.csv` | `fetch_gas_prices.py`  | One row per date per state (regular, mid_grade, premium, diesel). |
+| `data/treasury_yield_curve.csv` | `main.py treasury` | Daily Treasury yield curve (date + CMT rates by maturity). |
 
 Historical Open-Meteo (hourly/daily) is not fetched by a single built-in command; use `weather_modeling.sources.open_meteo.collect_historical` and `weather_modeling.storage.save_data` from your own script or notebook if needed.
 
@@ -111,7 +126,7 @@ Historical Open-Meteo (hourly/daily) is not fetched by a single built-in command
 The `weather_modeling` package is organized as:
 
 - **`weather_modeling.pipeline`** – **`build_training_data(daily_df, hourly_df)`** (feature table: lags, hourly aggregates, calendar; temps in °F); **`add_nws_targets(df, nws_df)`** (next-day high/low from NWS).
-- **`weather_modeling.storage`** – **`load_data`**, **`load_forecast`**, **`load_gas_data`**, **`load_nws_data`** (and corresponding `save_*`).
+- **`weather_modeling.storage`** – **`load_data`**, **`load_forecast`**, **`load_gas_data`**, **`load_nws_data`**, **`load_treasury_data`** (and corresponding `save_*`).
 
 Example (after you have `daily`, `hourly`, and NWS data):
 

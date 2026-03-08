@@ -133,3 +133,24 @@ def load_nws_data(directory: str | Path = "data") -> pd.DataFrame:
     if "report_date" in df.columns:
         df["report_date"] = pd.to_datetime(df["report_date"]).dt.date
     return df
+
+
+def save_treasury_data(df: pd.DataFrame, directory: str | Path = "data") -> Path:
+    """Write treasury yield curve DataFrame to data/treasury_yield_curve.csv."""
+    path = Path(directory)
+    path.mkdir(parents=True, exist_ok=True)
+    out_file = path / "treasury_yield_curve.csv"
+    if not df.empty:
+        df.to_csv(out_file, index=False)
+    return out_file
+
+
+def load_treasury_data(directory: str | Path = "data") -> pd.DataFrame:
+    """Load treasury yield curve from data/treasury_yield_curve.csv."""
+    path = Path(directory) / "treasury_yield_curve.csv"
+    if not path.exists():
+        return pd.DataFrame()
+    df = pd.read_csv(path)
+    if "date" in df.columns:
+        df["date"] = pd.to_datetime(df["date"]).dt.date
+    return df
